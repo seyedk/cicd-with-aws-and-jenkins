@@ -1,0 +1,95 @@
+Description: >
+  This template illustrates how to use GitHub, Jenkins Build Server and AWS CodePipeline to
+  achieve continuous deployment of source code from a GitHub repository via a
+  Docker container to an Amazon EC2 Container Service cluster.
+
+
+Parameters:
+  GitHubUser:
+    Type: String
+    Description: Your username on GitHub.
+
+  GitHubRepo:
+    Type: String
+    Default: ecs-demo-php-simple-app
+    Description: The repo name of the sample service.
+
+  GitHubBranch:
+    Type: String
+    Default: master
+    Description: The branch of the repo to continuously deploy.
+
+  GitHubToken:
+    Type: String
+    Default: Nothing
+    Description: >
+      Token for the user specified above. (https://github.com/settings/tokens)
+
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      GitHubUser:
+        default: "User"
+      GitHubRepo:
+        default: "Repo"
+      GitHubBranch:
+        default: "Branch"
+      GitHubToken:
+        default: "Personal Access Token"
+    ParameterGroups:
+      - Label:
+          default: GitHub Configuration
+        Parameters:
+          - GitHubRepo
+          - GitHubBranch
+          - GitHubUser
+          - GitHubToken
+
+
+Resources:
+
+  VPC:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/gw-ecs-cicd/templates/vpc.yaml
+      Parameters:
+        Name: !Ref AWS::StackName
+        VpcCIDR: 10.215.0.0/16
+        Subnet1CIDR: 10.215.11.0/24
+        Subnet2CIDR: 10.215.21.0/24
+
+  LoadBalancer:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/gw-ecs-cicd/templates/load-balancer.yaml
+      Parameters:
+        Subnets: !GetAtt VPC.Outputs.Subnets
+        VpcId: !GetAtt VPC.Outputs.VpcId
+  Cluster:
+   Type: AWS::CloudFormation::Stack
+   Properties:
+     TemplateURL: https://s3.amazonaws.com/gw-ecs-cicd/templates/ecs-cluster.yaml
+     Parameters:
+       SourceSecurityGroup: !GetAtt LoadBalancer.Outputs.SecurityGroup
+       Subnets: !GetAtt VPC.Outputs.Subnets
+       VpcId: !GetAtt VPC.Outputs.VpcId
+  Service:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/gw-ecs-cicd/templates/service.yaml
+      Parameters:
+        Cluster: !GetAtt Cluster.Outputs.ClusterName
+        TargetGroup: !GetAtt LoadBalancer.Outputs.TargetGroup      
+Outputs:
+  
+
+    Subnets: 
+        Description: "The VPC Subnets."
+        Value: !GetAtt VPC.Outputs.Subnets
+    VpcId:
+        Description: "The VPC ID."
+        Value: !GetAtt VPC.Outputs.VpcId 
+    ServiceUrl:
+        Description: The sample service that is being continuously deployed.
+        Value: !GetAtt LoadBalancer.Outputs.ServiceUrl
